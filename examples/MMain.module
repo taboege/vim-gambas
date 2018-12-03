@@ -1,0 +1,65 @@
+' Gambas module file
+
+Public Sub Main()
+  Dim iLimit As Integer = 10 ^ 5
+  Dim iPower As Integer = Log10(iLimit)
+
+  While iLimit <= 10 ^ 7
+    Print iLimit,
+    Bench(iLimit)
+    If iLimit = 10 ^ iPower Then
+      iLimit = 2 * 10 ^ iPower
+    Else
+      iLimit += 2 * 10 ^ iPower
+    Endif
+    iPower = Log10(iLimit)
+  Wend
+End
+
+Public Sub Bench(Limit As Integer)
+  Dim hMCol As New MergeCollection
+  Dim hSCol As New Collection
+  Dim iMColCount As Integer
+
+  Dim aEnts As New _Entry[]
+  Dim hEnt As _Entry
+  Dim iInd As Integer
+  Dim fStart As Float
+
+  For iInd = 1 To Limit
+    hEnt = New _Entry(RandomString(), Rnd(0, 100))
+    aEnts.Add(hEnt)
+  Next
+
+  fStart = Timer()
+  For Each hEnt In aEnts
+    hMCol[hEnt.Key] = hEnt.Value
+  Next
+  Print Timer() - fStart,
+  ' Note that asking for Count forces a waiting hall merge so this
+  ' benchmark is fair.
+  iMColCount = hMCol.Count
+  hMCol = Null
+
+  fStart = Timer()
+  For Each hEnt In aEnts
+    hSCol[hEnt.Key] = hEnt.Value
+  Next
+  Print Timer() - fStart
+
+  ' Quick sanity check
+  If hSCol.Count <> iMColCount Then
+    Error "Error", iMColCount, hSCol.Count
+  Endif
+End
+
+Private Function RandomString() As String
+  Dim hBytes As New Byte[](CInt(Rnd(0, 9)))
+  Dim iInd As Integer
+
+  If hBytes.Count = 0 Then Return "NullKey"
+  For iInd = 0 To hBytes.Max
+    hBytes[iInd] = CInt(Rnd(Asc("0"), Asc("Z") + 1))
+  Next
+  Return hBytes.ToString()
+End

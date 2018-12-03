@@ -1,0 +1,148 @@
+' Gambas class file
+
+' Lower bound for the array size of when to stop using Mergesort
+' and use Insertionsort instead.
+Private Const MergesortLimit As Integer = 16
+
+Private $aEntries As _Entry[]
+
+Property Read Count As Integer
+Property Read _Entries As _Entry[]
+
+Public Sub _new()
+  Clear()
+End
+
+'' Add a (Key, Value) pair.
+Public Sub Add(Key As String, Value As Variant)
+  Dim hEntry As New _Entry(Key, Value)
+
+  $aEntries.Add(hEntry)
+End
+
+Public Sub Clear()
+  $aEntries = New _Entry[]
+End
+
+'' Return a Key's index or the smallest index where it can be inserted if
+'' it was not found. The bucket is required to be sorted.
+''
+'' This is Binary search.
+Static Private Function _Find(Entries As _Entry[], Key As String) As Integer
+  Dim iStart As Integer = 0, iEnd As Integer = Entries.Count
+  Dim iMid As Integer
+
+  While iStart < iEnd ' Interval not empty?
+    iMid = (iStart + iEnd) / 2
+    If Comp(Entries[iMid].Key, Key) = 0 Then Return iMid
+    If Comp(Entries[iMid].Key, Key) < 0 Then
+      iStart = iMid + 1
+    Else
+      iEnd = iMid
+    Endif
+  Wend
+  Return iStart
+End
+
+'' Search a key if the bucket is sorted.
+Public Function Find(Key As String) As Integer
+  Dim iInd As Integer = _Find($aEntries, Key)
+
+  If iInd >= $aEntries.Count Then Return -1
+  Return IIf($aEntries[iInd].Key = Key, iInd, -1)
+End
+
+'' Remove a Key. The bucket must be sorted.
+Public Sub Remove(Key As String)
+  Dim iInd As Integer = Find(Key)
+
+  If iInd = -1 Then Return
+  $aEntries.Remove(iInd)
+End
+
+'' Sort this bucket. This is Mergesort + Insertionsort. Only the last
+'' instance (maximum index) of a particular key survives.
+Static Private Sub _Sort(Entries As _Entry[]) As _Entry[]
+  Dim aSorted As _Entry[]
+  Dim hEnt As _Entry
+  Dim iMid As Integer
+
+  If Entries.Count < MergesortLimit Then ' Insertionsort
+    aSorted = New _Entry[]
+    For Each hEnt In Entries
+      _Insert(aSorted, hEnt)
+    Next
+    Return aSorted
+  Endif
+  ' Mergesort
+  iMid = Entries.Count / 2
+  Return _Merge(_Sort(Entries.Copy(0, iMid)), _Sort(Entries.Copy(iMid, Entries.Count - iMid)))
+End
+
+'' Insertionsort. Pay attention to *replacing* an already present key.
+'' aArray is assumed to be sorted and to not contain duplicate keys.
+Static Private Function _Insert(Entries As _Entry[], Entry As _Entry)
+  Dim iInd As Integer = _Find(Entries, Entry.Key)
+
+  If iInd < Entries.Count And If Entries[iInd].Key = Entry.Key Then
+    Entries[iInd] = Entry
+  Else
+    If iInd < Entries.Count And If Comp(Entry.Key, Entries[iInd].Key) >= 0 Then Stop
+    Entries.Add(Entry, iInd)
+  Endif
+End
+
+Public Sub Sort()
+  $aEntries = _Sort($aEntries)
+End
+
+'' Merge two buckets. Both buckets are required to be sorted and to not contain
+'' duplicate keys. This routine equals the merge step of Mergesort.
+''
+'' If A and B have a common key, the one from B is taken.
+Static Private Function _Merge(A As _Entry[], B As _Entry[]) As _Entry[]
+  Dim iI As Integer = 0, iJ As Integer = 0
+  Dim iComp As Integer
+  Dim aMerge As New _Entry[]
+
+  While iI < A.Count And iJ < B.Count
+    iComp = A[iI]._compare(B[iJ])
+    If iComp = 0 Then
+      aMerge.Add(B[iJ])
+      Inc iI
+      Inc iJ
+    Else If iComp < 0 Then
+      aMerge.Add(A[iI])
+      Inc iI
+    Else ' iComp > 0
+      aMerge.Add(B[iJ])
+      Inc iJ
+    Endif
+   Wend
+   If iI = A.Count Then ' Put the non-consumed array into hA
+     A = B
+     iI = iJ
+   Endif
+   While iI < A.Count
+     aMerge.Add(A[iI])
+     Inc iI
+   Wend
+  Return aMerge
+End
+
+'' Merge another Bucket into this one.
+Public Sub Merge(Other As _Bucket)
+  $aEntries = _Merge($aEntries, Other._Entries)
+End
+
+Private Function Count_Read() As Integer
+  Return $aEntries.Count
+End
+
+Public Sub _get(Index As Integer) As _Entry
+  Return $aEntries[Index]
+End
+
+Private Function _Entries_Read() As _Entry[]
+  Return $aEntries
+End

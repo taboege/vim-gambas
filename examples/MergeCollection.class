@@ -1,0 +1,119 @@
+' Gambas class file
+
+' Number of buckets in the waiting hall
+Private NrBuckets As Integer = 3
+
+' Mimic the Collection interface
+Property Read Count, Length As Integer
+Property Read Key As String
+
+' Waiting hall, B_1, ..., B_m
+Private $aHall As _Bucket[]
+' The collection bucket M
+Private $aCollection As _Bucket
+' Where to drop the next inserted element
+Private $iNextBucket As Integer
+Private $sLastKey As String
+
+Public Sub _new()
+  ' Allocate our bucket system
+  Clear()
+End
+
+Private Sub UseKey(Key As String)
+  $sLastKey = Key
+End
+
+Public Sub Clear()
+  Dim iInd As Integer
+
+  $aCollection = New _Bucket
+  $aHall = New _Bucket[](NrBuckets)
+  For iInd = 0 To $aHall.Max
+    $aHall[iInd] = New _Bucket
+  Next
+  $iNextBucket = 0
+  UseKey(Null)
+End
+
+'' Merge in all waiting hall buckets
+Private Sub Merge()
+  Dim hBucket As _Bucket
+
+  If Not $aHall[0].Count Then Return
+  For Each hBucket In $aHall
+    hBucket.Sort()
+    $aCollection.Merge(hBucket)
+    hBucket.Clear()
+  Next
+End
+
+Public Sub _get(Key As String) As Variant
+  Dim iInd As Integer
+
+  UseKey(Key)
+  Merge()
+  iInd = $aCollection.Find(Key)
+  If iInd = -1 Then Return Null
+  Return $aCollection[iInd].Value
+End
+
+Public Sub _put(Value As Variant, Key As String)
+  UseKey(Key)
+  If IsNull(Value) Then
+    Remove(Key)
+    Return
+  Endif
+
+  $aHall[$iNextBucket].Add(Key, Value)
+  ' If we filled this bucket, move to the next. It is crucial that
+  ' the bucket choice is aware of the Merge() algorithm to treat
+  ' duplicate keys right.
+  If $aHall[$iNextBucket].Count * NrBuckets >= $aCollection.Count Then
+    $iNextBucket = ($iNextBucket + 1) Mod NrBuckets
+    ' If we filled all the buckets up to the threshold, merge them in
+    If Not $iNextBucket Then Merge()
+  Endif
+End
+
+'' Adding elements during a For Each loop is not supported currently.
+Public Sub _next() As Variant
+  Dim iInd As Integer
+  Dim hEnt As _Entry
+
+  ' Pull in all elements at the beginning
+  If Not Enum.Index Then Merge()
+  If Enum.Index = $aCollection.Count Then
+    Enum.Stop()
+    Return
+  Endif
+  iInd = IIf(IsNull(Enum.Index), 0, Enum.Index)
+  hEnt = $aCollection[iInd]
+  Inc iInd
+  Enum.Index = iInd
+  UseKey(hEnt.Key)
+  Return hEnt.Value
+End
+
+Public Sub Add(Value As Variant, Key As String)
+  Me[Key] = Value
+End
+
+Public Function Exist(Key As String) As Boolean
+  Return Me[Key] <> Null
+End
+
+Public Sub Remove(Key As String)
+  UseKey(Key)
+  Merge()
+  $aCollection.Remove(Key)
+End
+
+Private Function Count_Read() As Integer
+  Merge() ' Need to merge to remove duplicate keys in the buckets
+  Return $aCollection.Count
+End
+
+Private Function Key_Read() As String
+  Return $sLastKey
+End
